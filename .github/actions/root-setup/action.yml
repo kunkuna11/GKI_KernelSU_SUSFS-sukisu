@@ -94,6 +94,23 @@ runs:
           echo "Root commit mismatch: expected $expected_commit, got $actual_commit." >&2
           exit 1
         fi
+        # SukiSU-Ultra manager detection fix
+        if [ "$flavor" = "sukisu-ultra" ]; then
+          patch_file="$directory/kernel/supercall/supercall.c"
+          if [ ! -f "$patch_file" ]; then
+            echo "Expected SukiSU-Ultra source file not found: $patch_file" >&2
+            exit 1
+          fi
+          if grep -Fq 'return ksu_install_fd_with_permissions(O_CLOEXEC, 0);' "$patch_file"; then
+            sed -i '/^int ksu_install_fd(void)$/,/^}/ s/return ksu_install_fd_with_permissions(O_CLOEXEC, 0);/return ksu_install_fd_with_permissions(0, 0);/' "$patch_file"
+          elif grep -Fq 'return ksu_install_fd_with_permissions(0, 0);' "$patch_file"; then
+            echo "Manager FD fix already present"
+          else
+            echo "Unexpected ksu_install_fd() implementation" >&2
+            exit 1
+          fi
+          sed -n '/^int ksu_install_fd(void)$/,/^}/p' "$patch_file" | grep -Fq 'return ksu_install_fd_with_permissions(0, 0);'
+        fi
         if [ ! -f "$directory/kernel/Kconfig" ] || [ ! -f "$directory/kernel/Makefile" ]; then
           echo "Selected root checkout does not contain a kernel integration." >&2
           exit 1
